@@ -1,9 +1,10 @@
-use uuid::Uuid;
+use bevy_utils::Uuid;
 
 #[derive(Copy, Clone, Hash, Eq, PartialEq, Debug)]
 pub struct BufferId(Uuid);
 
 impl BufferId {
+    #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
         BufferId(Uuid::new_v4())
     }

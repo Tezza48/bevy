@@ -3,17 +3,20 @@ mod system;
 mod window;
 mod windows;
 
+use bevy_ecs::IntoSystem;
 pub use event::*;
 pub use system::*;
 pub use window::*;
 pub use windows::*;
 
 pub mod prelude {
-    pub use crate::{CursorMoved, Window, WindowDescriptor, Windows};
+    pub use crate::{
+        CursorEntered, CursorLeft, CursorMoved, FileDragAndDrop, ReceivedCharacter, Window,
+        WindowDescriptor, Windows,
+    };
 }
 
 use bevy_app::prelude::*;
-use bevy_ecs::IntoQuerySystem;
 
 pub struct WindowPlugin {
     pub add_primary_window: bool,
@@ -37,6 +40,13 @@ impl Plugin for WindowPlugin {
             .add_event::<WindowCloseRequested>()
             .add_event::<CloseWindow>()
             .add_event::<CursorMoved>()
+            .add_event::<CursorEntered>()
+            .add_event::<CursorLeft>()
+            .add_event::<ReceivedCharacter>()
+            .add_event::<WindowFocused>()
+            .add_event::<WindowScaleFactorChanged>()
+            .add_event::<WindowBackendScaleFactorChanged>()
+            .add_event::<FileDragAndDrop>()
             .init_resource::<Windows>();
 
         if self.add_primary_window {
@@ -44,11 +54,11 @@ impl Plugin for WindowPlugin {
             let window_descriptor = resources
                 .get::<WindowDescriptor>()
                 .map(|descriptor| (*descriptor).clone())
-                .unwrap_or_else(|| WindowDescriptor::default());
+                .unwrap_or_else(WindowDescriptor::default);
             let mut create_window_event = resources.get_mut::<Events<CreateWindow>>().unwrap();
             create_window_event.send(CreateWindow {
                 id: WindowId::primary(),
-                descriptor: window_descriptor.clone(),
+                descriptor: window_descriptor,
             });
         }
 

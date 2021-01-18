@@ -4,63 +4,46 @@ use bevy_ecs::Bundle;
 use bevy_render::{
     draw::Draw,
     mesh::Mesh,
-    pipeline::{DynamicBinding, PipelineSpecialization, RenderPipeline, RenderPipelines},
+    pipeline::{RenderPipeline, RenderPipelines},
+    prelude::Visible,
     render_graph::base::MainPass,
 };
-use bevy_transform::prelude::{Rotation, Scale, Transform, Translation};
+use bevy_transform::prelude::{GlobalTransform, Transform};
 
 /// A component bundle for "pbr mesh" entities
 #[derive(Bundle)]
-pub struct PbrComponents {
+pub struct PbrBundle {
     pub mesh: Handle<Mesh>,
     pub material: Handle<StandardMaterial>,
     pub main_pass: MainPass,
     pub draw: Draw,
+    pub visible: Visible,
     pub render_pipelines: RenderPipelines,
     pub transform: Transform,
-    pub translation: Translation,
-    pub rotation: Rotation,
-    pub scale: Scale,
+    pub global_transform: GlobalTransform,
 }
 
-impl Default for PbrComponents {
+impl Default for PbrBundle {
     fn default() -> Self {
         Self {
-            render_pipelines: RenderPipelines::from_pipelines(vec![RenderPipeline::specialized(
-                FORWARD_PIPELINE_HANDLE,
-                PipelineSpecialization {
-                    dynamic_bindings: vec![
-                        // Transform
-                        DynamicBinding {
-                            bind_group: 2,
-                            binding: 0,
-                        },
-                        // StandardMaterial_albedo
-                        DynamicBinding {
-                            bind_group: 3,
-                            binding: 0,
-                        },
-                    ],
-                    ..Default::default()
-                },
+            render_pipelines: RenderPipelines::from_pipelines(vec![RenderPipeline::new(
+                FORWARD_PIPELINE_HANDLE.typed(),
             )]),
             mesh: Default::default(),
+            visible: Default::default(),
             material: Default::default(),
             main_pass: Default::default(),
             draw: Default::default(),
             transform: Default::default(),
-            translation: Default::default(),
-            rotation: Default::default(),
-            scale: Default::default(),
+            global_transform: Default::default(),
         }
     }
 }
 
 /// A component bundle for "light" entities
-#[derive(Bundle, Default)]
-pub struct LightComponents {
+#[derive(Debug, Bundle, Default)]
+pub struct LightBundle {
     pub light: Light,
     pub transform: Transform,
-    pub translation: Translation,
-    pub rotation: Rotation,
+    pub global_transform: GlobalTransform,
 }

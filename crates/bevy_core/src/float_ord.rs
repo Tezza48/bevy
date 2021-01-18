@@ -11,6 +11,7 @@ use std::{
 #[derive(Debug, Copy, Clone, PartialOrd)]
 pub struct FloatOrd(pub f32);
 
+#[allow(clippy::derive_ord_xor_partial_ord)]
 impl Ord for FloatOrd {
     fn cmp(&self, other: &Self) -> Ordering {
         self.0.partial_cmp(&other.0).unwrap_or_else(|| {
@@ -39,7 +40,15 @@ impl Eq for FloatOrd {}
 
 impl Hash for FloatOrd {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        state.write(self.0.as_bytes());
+        if self.0.is_nan() {
+            // Ensure all NaN representations hash to the same value
+            state.write(f32::NAN.as_bytes())
+        } else if self.0 == 0.0 {
+            // Ensure both zeroes hash to the same value
+            state.write(0.0f32.as_bytes())
+        } else {
+            state.write(self.0.as_bytes());
+        }
     }
 }
 

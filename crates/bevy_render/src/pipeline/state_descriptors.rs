@@ -1,5 +1,5 @@
 use crate::texture::TextureFormat;
-use bevy_property::Property;
+use bevy_reflect::Reflect;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug)]
@@ -7,11 +7,17 @@ pub struct DepthStencilStateDescriptor {
     pub format: TextureFormat,
     pub depth_write_enabled: bool,
     pub depth_compare: CompareFunction,
-    pub stencil_front: StencilStateFaceDescriptor,
-    pub stencil_back: StencilStateFaceDescriptor,
-    pub stencil_read_mask: u32,
-    pub stencil_write_mask: u32,
+    pub stencil: StencilStateDescriptor,
 }
+
+#[derive(Clone, Debug)]
+pub struct StencilStateDescriptor {
+    pub front: StencilStateFaceDescriptor,
+    pub back: StencilStateFaceDescriptor,
+    pub read_mask: u32,
+    pub write_mask: u32,
+}
+
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 pub enum StencilOperation {
     Keep = 0,
@@ -53,7 +59,7 @@ pub enum CompareFunction {
     Always = 7,
 }
 
-#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq, Serialize, Deserialize, Property)]
+#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq, Serialize, Deserialize, Reflect)]
 pub enum PrimitiveTopology {
     PointList = 0,
     LineList = 1,
@@ -100,6 +106,7 @@ pub struct RasterizationStateDescriptor {
     pub depth_bias: i32,
     pub depth_bias_slope_scale: f32,
     pub depth_bias_clamp: f32,
+    pub clamp_depth: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -175,7 +182,7 @@ impl Default for BlendOperation {
     }
 }
 
-#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq, Serialize, Deserialize, Reflect)]
 pub enum IndexFormat {
     Uint16 = 0,
     Uint32 = 1,
@@ -183,6 +190,6 @@ pub enum IndexFormat {
 
 impl Default for IndexFormat {
     fn default() -> Self {
-        IndexFormat::Uint16
+        IndexFormat::Uint32
     }
 }

@@ -1,14 +1,15 @@
 use super::{Edge, RenderGraphError, ResourceSlotInfo, ResourceSlots};
 use crate::renderer::RenderContext;
-use bevy_ecs::{Commands, Resources, System, World};
+use bevy_ecs::{BoxedSystem, Commands, Resources, World};
+use bevy_utils::Uuid;
 use downcast_rs::{impl_downcast, Downcast};
 use std::{borrow::Cow, fmt::Debug};
-use uuid::Uuid;
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct NodeId(Uuid);
 
 impl NodeId {
+    #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
         NodeId(Uuid::new_v4())
     }
@@ -36,9 +37,10 @@ pub trait Node: Downcast + Send + Sync + 'static {
 impl_downcast!(Node);
 
 pub trait SystemNode: Node {
-    fn get_system(&self, commands: &mut Commands) -> Box<dyn System>;
+    fn get_system(&self, commands: &mut Commands) -> BoxedSystem;
 }
 
+#[derive(Debug)]
 pub struct Edges {
     pub id: NodeId,
     pub input_edges: Vec<Edge>,
@@ -48,7 +50,7 @@ pub struct Edges {
 impl Edges {
     pub(crate) fn add_input_edge(&mut self, edge: Edge) -> Result<(), RenderGraphError> {
         if self.has_input_edge(&edge) {
-            return Err(RenderGraphError::EdgeAlreadyExists(edge.clone()));
+            return Err(RenderGraphError::EdgeAlreadyExists(edge));
         }
         self.input_edges.push(edge);
         Ok(())
@@ -56,7 +58,7 @@ impl Edges {
 
     pub(crate) fn add_output_edge(&mut self, edge: Edge) -> Result<(), RenderGraphError> {
         if self.has_output_edge(&edge) {
-            return Err(RenderGraphError::EdgeAlreadyExists(edge.clone()));
+            return Err(RenderGraphError::EdgeAlreadyExists(edge));
         }
         self.output_edges.push(edge);
         Ok(())
@@ -80,7 +82,7 @@ impl Edges {
                     false
                 }
             })
-            .ok_or_else(|| RenderGraphError::UnconnectedNodeInputSlot {
+            .ok_or(RenderGraphError::UnconnectedNodeInputSlot {
                 input_slot: index,
                 node: self.id,
             })
@@ -96,7 +98,7 @@ impl Edges {
                     false
                 }
             })
-            .ok_or_else(|| RenderGraphError::UnconnectedNodeOutputSlot {
+            .ok_or(RenderGraphError::UnconnectedNodeOutputSlot {
                 output_slot: index,
                 node: self.id,
             })
@@ -143,7 +145,7 @@ impl NodeState {
     {
         self.node
             .downcast_ref::<T>()
-            .ok_or_else(|| RenderGraphError::WrongNodeType)
+            .ok_or(RenderGraphError::WrongNodeType)
     }
 
     pub fn node_mut<T>(&mut self) -> Result<&mut T, RenderGraphError>
@@ -152,7 +154,7 @@ impl NodeState {
     {
         self.node
             .downcast_mut::<T>()
-            .ok_or_else(|| RenderGraphError::WrongNodeType)
+            .ok_or(RenderGraphError::WrongNodeType)
     }
 
     pub fn validate_output_slots(&self) -> Result<(), RenderGraphError> {

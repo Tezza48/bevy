@@ -1,11 +1,8 @@
-use std::{
-    collections::{HashMap, VecDeque},
-    time::{Duration, SystemTime},
-};
-use uuid::Uuid;
+use bevy_utils::{Duration, Instant, StableHashMap, Uuid};
+use std::collections::VecDeque;
 
 /// Unique identifier for a [Diagnostic]
-#[derive(Debug, Copy, Clone, Hash, Eq, PartialEq)]
+#[derive(Debug, Copy, Clone, Hash, Eq, PartialEq, PartialOrd, Ord)]
 pub struct DiagnosticId(pub Uuid);
 
 impl DiagnosticId {
@@ -23,7 +20,7 @@ impl Default for DiagnosticId {
 /// A single measurement of a [Diagnostic]
 #[derive(Debug)]
 pub struct DiagnosticMeasurement {
-    pub time: SystemTime,
+    pub time: Instant,
     pub value: f64,
 }
 
@@ -40,7 +37,7 @@ pub struct Diagnostic {
 
 impl Diagnostic {
     pub fn add_measurement(&mut self, value: f64) {
-        let time = SystemTime::now();
+        let time = Instant::now();
         if self.history.len() == self.max_history_length {
             if let Some(removed_diagnostic) = self.history.pop_back() {
                 self.sum -= removed_diagnostic.value;
@@ -71,7 +68,7 @@ impl Diagnostic {
     }
 
     pub fn average(&self) -> Option<f64> {
-        if self.history.len() > 0 {
+        if !self.history.is_empty() {
             Some(self.sum / self.history.len() as f64)
         } else {
             None
@@ -89,11 +86,11 @@ impl Diagnostic {
 
         if let Some(oldest) = self.history.back() {
             if let Some(newest) = self.history.front() {
-                return newest.time.duration_since(oldest.time).ok();
+                return Some(newest.time.duration_since(oldest.time));
             }
         }
 
-        return None;
+        None
     }
 
     pub fn get_max_history_length(&self) -> usize {
@@ -102,9 +99,11 @@ impl Diagnostic {
 }
 
 /// A collection of [Diagnostic]s
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct Diagnostics {
-    diagnostics: HashMap<DiagnosticId, Diagnostic>,
+    // This uses a [`StableHashMap`] to ensure that the iteration order is deterministic between
+    // runs when all diagnostics are inserted in the same order.
+    diagnostics: StableHashMap<DiagnosticId, Diagnostic>,
 }
 
 impl Diagnostics {

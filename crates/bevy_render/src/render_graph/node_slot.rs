@@ -59,7 +59,7 @@ impl ResourceSlots {
         let index = self.get_slot_index(&label)?;
         self.slots
             .get(index)
-            .ok_or_else(|| RenderGraphError::InvalidNodeSlot(label))
+            .ok_or(RenderGraphError::InvalidNodeSlot(label))
     }
 
     pub fn get_slot_mut(
@@ -70,7 +70,7 @@ impl ResourceSlots {
         let index = self.get_slot_index(&label)?;
         self.slots
             .get_mut(index)
-            .ok_or_else(|| RenderGraphError::InvalidNodeSlot(label))
+            .ok_or(RenderGraphError::InvalidNodeSlot(label))
     }
 
     pub fn get_slot_index(&self, label: impl Into<SlotLabel>) -> Result<usize, RenderGraphError> {
@@ -83,7 +83,7 @@ impl ResourceSlots {
                 .enumerate()
                 .find(|(_i, s)| s.info.name == *name)
                 .map(|(i, _s)| i)
-                .ok_or_else(|| RenderGraphError::InvalidNodeSlot(label)),
+                .ok_or(RenderGraphError::InvalidNodeSlot(label)),
         }
     }
 
@@ -97,6 +97,10 @@ impl ResourceSlots {
 
     pub fn len(&self) -> usize {
         self.slots.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.slots.is_empty()
     }
 }
 

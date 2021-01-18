@@ -1,4 +1,4 @@
-use crate::Input;
+use crate::{ElementState, Input};
 use bevy_app::prelude::*;
 use bevy_ecs::{Local, Res, ResMut};
 
@@ -8,22 +8,6 @@ pub struct KeyboardInput {
     pub scan_code: u32,
     pub key_code: Option<KeyCode>,
     pub state: ElementState,
-}
-
-/// The current "press" state of an element
-#[derive(Debug, Clone, Eq, PartialEq)]
-pub enum ElementState {
-    Pressed,
-    Released,
-}
-
-impl ElementState {
-    pub fn is_pressed(&self) -> bool {
-        match self {
-            ElementState::Pressed => true,
-            _ => false,
-        }
-    }
 }
 
 /// State used by the keyboard input system
@@ -59,6 +43,7 @@ pub fn keyboard_input_system(
 
 /// The key code of a keyboard input.
 #[derive(Debug, Hash, Ord, PartialOrd, PartialEq, Eq, Clone, Copy)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[repr(u32)]
 pub enum KeyCode {
     /// The '1' key over the letters.
@@ -183,9 +168,11 @@ pub enum KeyCode {
 
     AbntC1,
     AbntC2,
-    Add,
+    NumpadAdd,
     Apostrophe,
     Apps,
+    Asterisk,
+    Plus,
     At,
     Ax,
     Backslash,
@@ -194,8 +181,8 @@ pub enum KeyCode {
     Colon,
     Comma,
     Convert,
-    Decimal,
-    Divide,
+    NumpadDecimal,
+    NumpadDivide,
     Equals,
     Grave,
     Kana,
@@ -209,7 +196,7 @@ pub enum KeyCode {
     MediaSelect,
     MediaStop,
     Minus,
-    Multiply,
+    NumpadMultiply,
     Mute,
     MyComputer,
     NavigateForward,  // also called "Prior"
@@ -233,7 +220,7 @@ pub enum KeyCode {
     Slash,
     Sleep,
     Stop,
-    Subtract,
+    NumpadSubtract,
     Sysrq,
     Tab,
     Underline,

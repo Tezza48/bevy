@@ -3,115 +3,124 @@ use bevy_ecs::prelude::*;
 
 pub fn transform_propagate_system(
     mut root_query: Query<
-        Without<Parent, (Option<&Children>, &mut Transform, Option<&LocalTransform>)>,
+        (Entity, Option<&Children>, &Transform, &mut GlobalTransform),
+        (Without<Parent>, With<GlobalTransform>),
     >,
-    mut local_transform_query: Query<(&mut Transform, &LocalTransform, Option<&Children>)>,
+    mut transform_query: Query<(&Transform, &mut GlobalTransform), With<Parent>>,
+    changed_transform_query: Query<Entity, Changed<Transform>>,
+    children_query: Query<Option<&Children>, (With<Parent>, With<GlobalTransform>)>,
 ) {
-    for (children, mut transform, local_transform) in &mut root_query.iter() {
-        if let Some(local_transform) = local_transform {
-            transform.value = local_transform.0;
+    for (entity, children, transform, mut global_transform) in root_query.iter_mut() {
+        let mut changed = false;
+        if changed_transform_query.get(entity).is_ok() {
+            *global_transform = GlobalTransform::from(*transform);
+            changed = true;
         }
 
         if let Some(children) = children {
             for child in children.0.iter() {
-                propagate_recursive(*transform, &mut local_transform_query, *child);
+                propagate_recursive(
+                    &global_transform,
+                    &changed_transform_query,
+                    &mut transform_query,
+                    &children_query,
+                    *child,
+                    changed,
+                );
             }
         }
     }
 }
 
 fn propagate_recursive(
-    parent_local_to_world: Transform,
-    local_transform_query: &mut Query<(&mut Transform, &LocalTransform, Option<&Children>)>,
+    parent: &GlobalTransform,
+    changed_transform_query: &Query<Entity, Changed<Transform>>,
+    transform_query: &mut Query<(&Transform, &mut GlobalTransform), With<Parent>>,
+    children_query: &Query<Option<&Children>, (With<Parent>, With<GlobalTransform>)>,
     entity: Entity,
+    mut changed: bool,
 ) {
-    log::trace!("Updating Transform for {:?}", entity);
-    let local_transform = {
-        if let Ok(local_transform) = local_transform_query.get::<LocalTransform>(entity) {
-            *local_transform
+    changed |= changed_transform_query.get(entity).is_ok();
+
+    let global_matrix = {
+        if let Ok((transform, mut global_transform)) = transform_query.get_mut(entity) {
+            if changed {
+                *global_transform = parent.mul_transform(*transform);
+            }
+            *global_transform
         } else {
-            log::warn!(
-                "Entity {:?} is a child in the hierarchy but does not have a LocalTransform",
-                entity
-            );
             return;
         }
     };
 
-    let new_transform = Transform {
-        value: parent_local_to_world.value * local_transform.0,
-        sync: true,
-    };
-
-    {
-        let mut transform = local_transform_query.get_mut::<Transform>(entity).unwrap();
-        transform.value = new_transform.value;
-    }
-
-    // Collect children
-    let children = local_transform_query
-        .get::<Children>(entity)
-        .map(|e| e.0.iter().cloned().collect::<Vec<_>>())
-        .unwrap_or_default();
-
-    for child in children {
-        propagate_recursive(new_transform, local_transform_query, child);
+    if let Ok(Some(children)) = children_query.get(entity) {
+        for child in children.0.iter() {
+            propagate_recursive(
+                &global_matrix,
+                changed_transform_query,
+                transform_query,
+                children_query,
+                *child,
+                changed,
+            );
+        }
     }
 }
 
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{hierarchy::BuildChildren, transform_systems};
-    use bevy_ecs::{Resources, Schedule, World};
-    use bevy_math::{Mat4, Vec3};
+    use crate::hierarchy::{parent_update_system, BuildChildren, BuildWorldChildren};
+    use bevy_ecs::{Resources, Schedule, SystemStage, World};
 
     #[test]
     fn did_propagate() {
         let mut world = World::default();
         let mut resources = Resources::default();
 
+        let mut update_stage = SystemStage::parallel();
+        update_stage.add_system(parent_update_system.system());
+        update_stage.add_system(transform_propagate_system.system());
+
         let mut schedule = Schedule::default();
-        schedule.add_stage("update");
-        for system in transform_systems() {
-            schedule.add_system_to_stage("update", system);
-        }
+        schedule.add_stage("update", update_stage);
 
         // Root entity
-        let parent = world.spawn((Translation::new(1.0, 0.0, 0.0), Transform::identity()));
-        let children = world
-            .spawn_batch(vec![
-                (
-                    Translation::new(0.0, 2.0, 0.0),
-                    LocalTransform::identity(),
-                    Transform::identity(),
-                    Parent(parent),
-                ),
-                (
-                    Translation::new(0.0, 0.0, 3.0),
-                    LocalTransform::identity(),
-                    Transform::identity(),
-                    Parent(parent),
-                ),
-            ])
-            .collect::<Vec<Entity>>();
-        // we need to run the schedule three times because components need to be filled in
-        // to resolve this problem in code, just add the correct components, or use Commands
-        // which adds all of the components needed with the correct state (see next test)
-        schedule.run(&mut world, &mut resources);
-        schedule.run(&mut world, &mut resources);
-        schedule.run(&mut world, &mut resources);
+        world.spawn((
+            Transform::from_xyz(1.0, 0.0, 0.0),
+            GlobalTransform::identity(),
+        ));
+
+        let mut children = Vec::new();
+        world
+            .build()
+            .spawn((
+                Transform::from_xyz(1.0, 0.0, 0.0),
+                GlobalTransform::identity(),
+            ))
+            .with_children(|parent| {
+                parent
+                    .spawn((
+                        Transform::from_xyz(0.0, 2.0, 0.),
+                        GlobalTransform::identity(),
+                    ))
+                    .for_current_entity(|entity| children.push(entity))
+                    .spawn((
+                        Transform::from_xyz(0.0, 0.0, 3.),
+                        GlobalTransform::identity(),
+                    ))
+                    .for_current_entity(|entity| children.push(entity));
+            });
+        schedule.initialize_and_run(&mut world, &mut resources);
 
         assert_eq!(
-            world.get::<Transform>(children[0]).unwrap().value,
-            Mat4::from_translation(Vec3::new(1.0, 0.0, 0.0))
-                * Mat4::from_translation(Vec3::new(0.0, 2.0, 0.0))
+            *world.get::<GlobalTransform>(children[0]).unwrap(),
+            GlobalTransform::from_xyz(1.0, 0.0, 0.0) * Transform::from_xyz(0.0, 2.0, 0.0)
         );
 
         assert_eq!(
-            world.get::<Transform>(children[1]).unwrap().value,
-            Mat4::from_translation(Vec3::new(1.0, 0.0, 0.0))
-                * Mat4::from_translation(Vec3::new(0.0, 0.0, 3.0))
+            *world.get::<GlobalTransform>(children[1]).unwrap(),
+            GlobalTransform::from_xyz(1.0, 0.0, 0.0) * Transform::from_xyz(0.0, 0.0, 3.0)
         );
     }
 
@@ -120,37 +129,46 @@ mod test {
         let mut world = World::default();
         let mut resources = Resources::default();
 
+        let mut update_stage = SystemStage::parallel();
+        update_stage.add_system(parent_update_system.system());
+        update_stage.add_system(transform_propagate_system.system());
+
         let mut schedule = Schedule::default();
-        schedule.add_stage("update");
-        for system in transform_systems() {
-            schedule.add_system_to_stage("update", system);
-        }
+        schedule.add_stage("update", update_stage);
 
         // Root entity
         let mut commands = Commands::default();
+        commands.set_entity_reserver(world.get_entity_reserver());
         let mut children = Vec::new();
         commands
-            .spawn((Translation::new(1.0, 0.0, 0.0), Transform::identity()))
+            .spawn((
+                Transform::from_xyz(1.0, 0.0, 0.0),
+                GlobalTransform::identity(),
+            ))
             .with_children(|parent| {
                 parent
-                    .spawn((Translation::new(0.0, 2.0, 0.0), Transform::identity()))
+                    .spawn((
+                        Transform::from_xyz(0.0, 2.0, 0.0),
+                        GlobalTransform::identity(),
+                    ))
                     .for_current_entity(|entity| children.push(entity))
-                    .spawn((Translation::new(0.0, 0.0, 3.0), Transform::identity()))
+                    .spawn((
+                        Transform::from_xyz(0.0, 0.0, 3.0),
+                        GlobalTransform::identity(),
+                    ))
                     .for_current_entity(|entity| children.push(entity));
             });
         commands.apply(&mut world, &mut resources);
-        schedule.run(&mut world, &mut resources);
+        schedule.initialize_and_run(&mut world, &mut resources);
 
         assert_eq!(
-            world.get::<Transform>(children[0]).unwrap().value,
-            Mat4::from_translation(Vec3::new(1.0, 0.0, 0.0))
-                * Mat4::from_translation(Vec3::new(0.0, 2.0, 0.0))
+            *world.get::<GlobalTransform>(children[0]).unwrap(),
+            GlobalTransform::from_xyz(1.0, 0.0, 0.0) * Transform::from_xyz(0.0, 2.0, 0.0)
         );
 
         assert_eq!(
-            world.get::<Transform>(children[1]).unwrap().value,
-            Mat4::from_translation(Vec3::new(1.0, 0.0, 0.0))
-                * Mat4::from_translation(Vec3::new(0.0, 0.0, 3.0))
+            *world.get::<GlobalTransform>(children[1]).unwrap(),
+            GlobalTransform::from_xyz(1.0, 0.0, 0.0) * Transform::from_xyz(0.0, 0.0, 3.0)
         );
     }
 }

@@ -1,10 +1,11 @@
 use super::{NodeId, NodeState, RenderGraph, RenderGraphError};
-use std::collections::HashMap;
+use bevy_utils::HashMap;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum StagerError {
-    #[error("Encountered a RenderGraphError")]
+    // This might have to be `:` tagged at the end.
+    #[error("encountered a `RenderGraphError`")]
     RenderGraphError(#[from] RenderGraphError),
 }
 
@@ -75,7 +76,7 @@ impl Stages {
             node_borrows.push((node, indices));
         }
 
-        node_borrows.sort_by_key(|(_node, indices)| indices.clone());
+        node_borrows.sort_by_key(|(_node, indices)| <&NodeIndices>::clone(indices));
         let mut last_stage = usize::MAX;
         let mut last_job = usize::MAX;
         for (node, indices) in node_borrows.drain(..) {
@@ -107,7 +108,7 @@ pub trait RenderGraphStager {
 
 // TODO: remove this
 /// This scheduler ignores dependencies and puts everything in one stage. It shouldn't be used for anything :)
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct LinearStager;
 
 impl RenderGraphStager for LinearStager {
@@ -124,7 +125,7 @@ impl RenderGraphStager for LinearStager {
     }
 }
 
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 /// Determines the grouping strategy used when constructing graph stages
 pub enum JobGrouping {
     /// Default to adding the current node to a new job in its assigned stage. This results
@@ -135,6 +136,7 @@ pub enum JobGrouping {
     Tight,
 }
 
+#[derive(Debug)]
 /// Produces Render Graph stages and jobs in a way that ensures node dependencies are respected.
 pub struct DependentNodeStager {
     job_grouping: JobGrouping,
@@ -159,9 +161,9 @@ impl RenderGraphStager for DependentNodeStager {
         // get all nodes without input. this intentionally includes nodes with no outputs
         let output_only_nodes = render_graph
             .iter_nodes()
-            .filter(|node| node.input_slots.len() == 0);
+            .filter(|node| node.input_slots.is_empty());
         let mut stages = vec![Stage::default()];
-        let mut node_stages = HashMap::new();
+        let mut node_stages = HashMap::default();
         for output_only_node in output_only_nodes {
             // each "output only" node should start a new job on the first stage
             stage_node(
@@ -190,8 +192,7 @@ fn stage_node(
             .edges
             .input_edges
             .iter()
-            .find(|e| !node_stages_and_jobs.contains_key(&e.get_output_node()))
-            .is_some()
+            .any(|e| !node_stages_and_jobs.contains_key(&e.get_output_node()))
     {
         return;
     }
@@ -211,7 +212,7 @@ fn stage_node(
         .map(|e| {
             node_stages_and_jobs
                 .get(&e.get_output_node())
-                .expect("already checked that parents were visited")
+                .expect("Already checked that parents were visited.")
         })
         .max()
     {
@@ -223,7 +224,7 @@ fn stage_node(
             .filter(|e| {
                 let (max_stage, _) = node_stages_and_jobs
                     .get(&e.get_output_node())
-                    .expect("already checked that parents were visited");
+                    .expect("Already checked that parents were visited.");
                 max_stage == max_parent_stage
             })
             .count();

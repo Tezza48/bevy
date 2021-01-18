@@ -1,16 +1,17 @@
-use bevy_asset::{Assets, Handle};
+use bevy_asset::{Assets, HandleUntyped};
+use bevy_reflect::TypeUuid;
 use bevy_render::{
     pipeline::{
         BlendDescriptor, BlendFactor, BlendOperation, ColorStateDescriptor, ColorWrite,
         CompareFunction, CullMode, DepthStencilStateDescriptor, FrontFace, PipelineDescriptor,
-        RasterizationStateDescriptor, StencilStateFaceDescriptor,
+        RasterizationStateDescriptor, StencilStateDescriptor, StencilStateFaceDescriptor,
     },
     shader::{Shader, ShaderStage, ShaderStages},
     texture::TextureFormat,
 };
 
-pub const FORWARD_PIPELINE_HANDLE: Handle<PipelineDescriptor> =
-    Handle::from_u128(131483623140127713893804825450360211204);
+pub const FORWARD_PIPELINE_HANDLE: HandleUntyped =
+    HandleUntyped::weak_from_u64(PipelineDescriptor::TYPE_UUID, 13148362314012771389);
 
 pub(crate) fn build_forward_pipeline(shaders: &mut Assets<Shader>) -> PipelineDescriptor {
     PipelineDescriptor {
@@ -20,18 +21,21 @@ pub(crate) fn build_forward_pipeline(shaders: &mut Assets<Shader>) -> PipelineDe
             depth_bias: 0,
             depth_bias_slope_scale: 0.0,
             depth_bias_clamp: 0.0,
+            clamp_depth: false,
         }),
         depth_stencil_state: Some(DepthStencilStateDescriptor {
             format: TextureFormat::Depth32Float,
             depth_write_enabled: true,
             depth_compare: CompareFunction::Less,
-            stencil_front: StencilStateFaceDescriptor::IGNORE,
-            stencil_back: StencilStateFaceDescriptor::IGNORE,
-            stencil_read_mask: 0,
-            stencil_write_mask: 0,
+            stencil: StencilStateDescriptor {
+                front: StencilStateFaceDescriptor::IGNORE,
+                back: StencilStateFaceDescriptor::IGNORE,
+                read_mask: 0,
+                write_mask: 0,
+            },
         }),
         color_states: vec![ColorStateDescriptor {
-            format: TextureFormat::Bgra8UnormSrgb,
+            format: TextureFormat::default(),
             color_blend: BlendDescriptor {
                 src_factor: BlendFactor::SrcAlpha,
                 dst_factor: BlendFactor::OneMinusSrcAlpha,

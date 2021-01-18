@@ -1,8 +1,8 @@
 use super::Camera;
 use bevy_ecs::{Entity, Query, ResMut};
-use std::collections::HashMap;
+use bevy_utils::HashMap;
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct ActiveCameras {
     pub cameras: HashMap<String, Option<Entity>>,
 }
@@ -17,17 +17,17 @@ impl ActiveCameras {
     }
 
     pub fn get(&self, name: &str) -> Option<Entity> {
-        self.cameras.get(name).and_then(|e| e.clone())
+        self.cameras.get(name).and_then(|e| *e)
     }
 }
 
 pub fn active_cameras_system(
     mut active_cameras: ResMut<ActiveCameras>,
-    mut query: Query<(Entity, &Camera)>,
+    query: Query<(Entity, &Camera)>,
 ) {
     for (name, active_camera) in active_cameras.cameras.iter_mut() {
-        if let None = active_camera {
-            for (camera_entity, camera) in &mut query.iter() {
+        if active_camera.is_none() {
+            for (camera_entity, camera) in query.iter() {
                 if let Some(ref current_name) = camera.name {
                     if current_name == name {
                         *active_camera = Some(camera_entity);

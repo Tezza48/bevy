@@ -1,6 +1,9 @@
 use crate::app_builder::AppBuilder;
-use bevy_ecs::{ParallelExecutor, Resources, Schedule, World};
+use bevy_ecs::{Resources, Schedule, World};
+#[cfg(feature = "trace")]
+use bevy_utils::tracing::info_span;
 
+#[allow(clippy::needless_doctest_main)]
 /// Containers of app logic and data
 ///
 /// App store the ECS World, Resources, Schedule, and Executor. They also store the "run" function of the App, which
@@ -27,9 +30,6 @@ pub struct App {
     pub resources: Resources,
     pub runner: Box<dyn Fn(App)>,
     pub schedule: Schedule,
-    pub executor: ParallelExecutor,
-    pub startup_schedule: Schedule,
-    pub startup_executor: ParallelExecutor,
 }
 
 impl Default for App {
@@ -38,9 +38,6 @@ impl Default for App {
             world: Default::default(),
             resources: Default::default(),
             schedule: Default::default(),
-            executor: Default::default(),
-            startup_schedule: Default::default(),
-            startup_executor: ParallelExecutor::without_tracker_clears(),
             runner: Box::new(run_once),
         }
     }
@@ -56,18 +53,15 @@ impl App {
     }
 
     pub fn update(&mut self) {
-        self.schedule.initialize(&mut self.resources);
-        self.executor
-            .run(&mut self.schedule, &mut self.world, &mut self.resources);
+        self.schedule
+            .initialize_and_run(&mut self.world, &mut self.resources);
     }
 
     pub fn run(mut self) {
-        self.startup_schedule.initialize(&mut self.resources);
-        self.startup_executor.run(
-            &mut self.startup_schedule,
-            &mut self.world,
-            &mut self.resources,
-        );
+        #[cfg(feature = "trace")]
+        let bevy_app_run_span = info_span!("bevy_app");
+        #[cfg(feature = "trace")]
+        let _bevy_app_run_guard = bevy_app_run_span.enter();
 
         let runner = std::mem::replace(&mut self.runner, Box::new(run_once));
         (runner)(self);
@@ -75,4 +69,5 @@ impl App {
 }
 
 /// An event that indicates the app should exit. This will fully exit the app process.
+#[derive(Debug, Clone)]
 pub struct AppExit;

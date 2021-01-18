@@ -1,8 +1,8 @@
-use super::Texture;
 use crate::pipeline::CompareFunction;
+use std::num::NonZeroU8;
 
 /// Describes a sampler
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct SamplerDescriptor {
     pub address_mode_u: AddressMode,
     pub address_mode_v: AddressMode,
@@ -13,28 +13,20 @@ pub struct SamplerDescriptor {
     pub lod_min_clamp: f32,
     pub lod_max_clamp: f32,
     pub compare_function: Option<CompareFunction>,
-    pub anisotropy_clamp: Option<u8>,
+    pub anisotropy_clamp: Option<NonZeroU8>,
+}
+
+impl SamplerDescriptor {
+    /// Sets the address mode for all dimensions of the sampler descriptor.
+    pub fn set_address_mode(&mut self, address_mode: AddressMode) {
+        self.address_mode_u = address_mode;
+        self.address_mode_v = address_mode;
+        self.address_mode_w = address_mode;
+    }
 }
 
 impl Default for SamplerDescriptor {
     fn default() -> Self {
-        SamplerDescriptor {
-            address_mode_u: AddressMode::ClampToEdge,
-            address_mode_v: AddressMode::ClampToEdge,
-            address_mode_w: AddressMode::ClampToEdge,
-            mag_filter: FilterMode::Nearest,
-            min_filter: FilterMode::Linear,
-            mipmap_filter: FilterMode::Nearest,
-            lod_min_clamp: 0.0,
-            lod_max_clamp: std::f32::MAX,
-            compare_function: None,
-            anisotropy_clamp: None,
-        }
-    }
-}
-
-impl From<&Texture> for SamplerDescriptor {
-    fn from(_texture: &Texture) -> Self {
         SamplerDescriptor {
             address_mode_u: AddressMode::ClampToEdge,
             address_mode_v: AddressMode::ClampToEdge,
